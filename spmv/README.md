@@ -1,2 +1,3 @@
 # spmv
-My cool new project!
+
+`unzip data/matrix.zip`
