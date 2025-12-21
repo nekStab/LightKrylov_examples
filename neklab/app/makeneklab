@@ -1,0 +1,178 @@
+#!/bin/bash
+set -a
+
+# Compiler and architecture settings
+#FC=""
+#CC=""
+#FFLAGS=""
+#USR_LFLAGS=""
+#ar=""
+
+# Fetch version information for user reference
+N_VERSION=$(git -C $NEK_SOURCE_ROOT describe --tag --long --always)
+NS_VERSION=$(git -C $NEKLAB_SOURCE_ROOT describe --tag --long --always)
+
+#-------------------------------------------------------------------------------
+# Compiler Detection
+#-------------------------------------------------------------------------------
+if command -v mpiifort >/dev/null 2>&1; then
+    # Intel compiler found
+    echo "Intel compiler found: $(mpiifort -v)"
+    FC="mpiifort"
+    CC="mpiicc"
+    FFLAGS+=" -extend-source" # Enables long lines.
+    FFLAGS+=" -fixed" # Enables fixed-form source code, necessary as we mix .f90 files.
+    
+    if [[ $(mpiicx --version 2>&1) =~ "oneapi" ]]; then
+        FFLAGS+=" -qmkl"
+        CC="mpiicx"
+        CFLAGS+=" -w"
+    else
+        FFLAGS+=" -mkl -xHost"
+    fi
+
+    FFLAGS+=" -g -traceback"
+    USR_LFLAGS+=" -I${MKLROOT}/include -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_ilp64.a ${MKLROOT}/lib/intel64/libmkl_sequential.a ${MKLROOT}/lib/intel64/libmkl_core.a -Wl,--end-group -lpthread -lm -ldl"
+else
+    if [[ "$(uname)" == "Darwin" ]]; then
+        # On macOS with Homebrew's mpif90
+        if [[ -f "/opt/homebrew/bin/mpif90" ]]; then
+            echo "Homebrew mpif90 found"
+            FC="/opt/homebrew/bin/mpif90"
+        else
+            echo "Clang compiler found: $(clang --version | head -n1)"
+        fi
+    else
+        # On Linux, we expect gcc to be gcc
+        echo "GCC compiler found: $(gcc --version | head -n1)"
+    fi
+    FC="mpifort"
+    CC="mpicc"
+    FFLAGS+=" -ffixed-form" # Enables fixed-form source code, necessary as we mix .f90 files.
+    FFLAGS+=" -ffixed-line-length-none" # Allows for any line length in fixed-form source code.
+    FFLAGS+=" -march=native" # Enables all instruction subsets supported by the local machine.
+    #FFLAGS+=" -mtune=native" # Enables all instruction subsets supported by the local machine.
+    FFLAGS+=" -g" # Enables debugging information.
+    FFLAGS+=" -fbacktrace" # Provides a backtrace in case of errors, useful for debugging.
+    FFLAGS+=" -std=legacy -Wall" # Provides a backtrace in case of errors, useful for debugging.
+    
+fi
+
+CFLAGS+=" -w" # Disable warnings for C compiler
+#-------------------------------------------------------------------------------
+# Linking with LAPACK and BLAS
+#-------------------------------------------------------------------------------
+
+export PPLIST="VENDOR_BLAS"
+
+# Lapack is a library of linear algebra routines.
+# Blas (Basic Linear Algebra Subprograms) is used by Lapack.
+
+if [[ $(uname -s) == "Darwin" ]]; then
+    USR_LFLAGS+=" -framework Accelerate"
+else
+    USR_LFLAGS+=" -llapack -lblas"
+fi
+#export USR_LFLAGS+=" -L/usr/local/opt/openblas/lib"
+#export FFLAGS+=" -I/usr/local/opt/openblas/include"
+#export USR_LFLAGS+=" -lopenblas" # OpenBlas is a faster alternative to LAPACK and BLAS
+
+#-------------------------------------------------------------------------------
+# Linking with LightKrylov library
+#-------------------------------------------------------------------------------
+export USR_LFLAGS+=" -lLightKrylov"
+export USR_LFLAGS+=" -L$HOME/.local/lib -lLightKrylov"
+export FFLAGS+=" -I$HOME/.local/include"
+
+#-------------------------------------------------------------------------------
+# Architecture Detection
+#-------------------------------------------------------------------------------
+LD="$FC" # Linker (default to Fortran compiler)
+case $(uname -s) in
+    Darwin)
+        case $(uname -m) in
+        x86_64)
+            ;;
+        arm64)
+            FFLAGS+=" -mcmodel=small" # no support for large
+            ;;
+        esac
+        ;;
+    Linux)
+        case $(uname -p) in
+            x86_64) ar="x86_64"; FFLAGS+=" -mcmodel=large" ;;
+            arm)    ar="arm" ;;
+        esac
+        ;;
+esac
+
+#-------------------------------------------------------------------------------
+# Final Preparations
+#-------------------------------------------------------------------------------
+FFLAGS+=" -DNVERSION=\"'${N_VERSION}'\" -DNSVERSION=\"'${NS_VERSION}'\""
+export FFLAGS
+
+# Update makefile and static variables
+echo "include $NEKLAB_SOURCE_ROOT/src/makefile_neklab" > makefile_usr.inc
+
+# User-specified object files
+USR="neklab_vectors.o"
+USR+=" real_vectors.o"
+USR+=" real_extended_vectors.o"
+USR+=" complex_vectors.o"
+USR+=" neklab_utils.o"
+USR+=" neklab_nek_setup.o"
+USR+=" neklab_nek_forcing.o"
+USR+=" neklab_linops.o"
+USR+=" exponential_propagator.o"
+USR+=" exponential_propagator_temp.o"
+USR+=" exponential_propagator_proj.o"
+USR+=" resolvent.o"
+USR+=" neklab_systems.o"
+USR+=" fixed_point.o"
+USR+=" fixed_point_temp.o"
+USR+=" periodic_orbit.o"
+USR+=" neklab_otd.o"
+USR+=" neklab_analysis.o"
+USR+=" neklab.o"
+export USR
+
+# Output summary of settings
+echo ""
+echo "  compilation script: $0"
+echo "  Nek5000 version:    $N_VERSION"
+echo "  neklab version:     $NS_VERSION"
+echo "  preparing compilation with:"
+echo "      compiler:     $(which $FC)"
+echo "      flags:      $FFLAGS"
+echo "      link-flags: $USR_LFLAGS"
+echo "  USR = $USR"
+echo ""
+
+set +a -e
+$NEK_SOURCE_ROOT/bin/nekconfig $@
+if [[ $1 != "clean" ]]; then
+ $NEK_SOURCE_ROOT/bin/nekconfig -build-dep
+ set -o pipefail
+ touch $1.usr 
+ 
+  # First try with 4 procs (default for nek5000)
+ set +e  # Don't exit on error (otherwise we can't retry)
+ make -j4 2>&1 | tee -a build.log
+ BUILD_RESULT=$?
+ 
+ # Retry up to 5 times if needed (race condition in parallel build)
+ ATTEMPT=1 # we try then up to 8 passes (1st try + 7 retries)
+ # TODO: improve order of files in makefile_neklab to minimize this
+ while [ $BUILD_RESULT -ne 0 ] && [ $ATTEMPT -lt 8 ]; do
+   ATTEMPT=$((ATTEMPT + 1))
+   echo "Retry $ATTEMPT/8..."
+   make -j4 2>&1 | tee -a build.log
+   BUILD_RESULT=$?
+ done
+ set +o pipefail
+fi
+if [ $(ls *.mod 2>/dev/null | wc -l) -gt 0 ]; then
+    mv *.mod obj
+    mv *.smod obj 2>/dev/null || true
+fi
