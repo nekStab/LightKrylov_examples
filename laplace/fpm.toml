@@ -22,5 +22,5 @@ source-form = "free"
 
 [dependencies]
 stdlib      = "*"
-mpi         = "*"
+# mpi         = "*"
 LightKrylov = {git="https://github.com/nekStab/LightKrylov.git"}
