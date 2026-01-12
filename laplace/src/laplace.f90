@@ -7,12 +7,12 @@ module laplace
    private
 
    !> Number of points per direction.
-   integer, parameter :: nx = 128
-   integer, parameter :: ny = 128
-   real(dp), parameter :: Lx = 1.0_dp
-   real(dp), parameter :: Ly = 1.0_dp
-   real(dp), parameter :: dx = Lx/(nx + 1)
-   real(dp), parameter :: dy = Ly/(ny + 1)
+   integer, parameter, public :: nx = 128
+   integer, parameter, public :: ny = 128
+   real(dp), parameter, public :: Lx = 1.0_dp
+   real(dp), parameter, public :: Ly = 1.0_dp
+   real(dp), parameter, public :: dx = Lx/(nx + 1)
+   real(dp), parameter, public :: dy = Ly/(ny + 1)
 
    !> Derived-type for the vector.
    type, extends(abstract_vector_rdp), public :: vector
@@ -64,6 +64,7 @@ contains
          do concurrent(i=1:nx, j=1:ny)
             alpha = alpha + self%u(i, j)*vec%u(i, j)
          end do
+         alpha = alpha*dx*dy
       end select
    end function dot
 
@@ -129,8 +130,8 @@ contains
 
       !> Interior domain.
       do concurrent(i=1:m, j=1:n)
-         v(i, j) = (u(i + 1, j) - 2*u(i, j) + u(i - 1, j))/dx**2 &
-                   + (u(i, j + 1) - 2*u(i, j) + u(i, j - 1))/dy**2
+         v(i, j) = (-u(i + 1, j) + 2*u(i, j) - u(i - 1, j))/dx**2 &
+                   + (-u(i, j + 1) + 2*u(i, j) - u(i, j - 1))/dy**2
       end do
       !> Top-bottom boundary conditions.
       v(:, 0) = 0.0_dp; v(:, n + 1) = 0.0_dp
