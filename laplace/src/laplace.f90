@@ -60,22 +60,36 @@ contains
       integer :: i, j
       select type (vec)
       type is (vector)
-         alpha = 0.0_dp
-         do concurrent(i=1:nx, j=1:ny)
-            alpha = alpha + self%u(i, j)*vec%u(i, j)
-         end do
-         alpha = alpha*dx*dy
+         alpha = dot_kernel(nx, ny, self%u, vec%u)
       end select
    end function dot
+
+   real(dp) pure function dot_kernel(m, n, u, v) result(alpha)
+      integer, intent(in) :: m, n
+      real(dp), intent(in) :: u(0:m + 1, 0:n + 1), v(0:m + 1, 0:n + 1)
+      integer :: i, j
+      alpha = 0.0_dp
+      do concurrent(i=1:m, j=1:n)
+         alpha = alpha + u(i, j)*v(i, j)
+      end do
+      alpha = alpha*dx*dy
+   end function dot_kernel
 
    subroutine scal(self, alpha)
       class(vector), intent(inout) :: self
       real(dp), intent(in) :: alpha
-      integer :: i, j
-      do concurrent(i=0:nx + 1, j=0:ny + 1)
-         self%u(i, j) = alpha*self%u(i, j)
-      end do
+      call scal_kernel(nx, ny, alpha, self%u)
    end subroutine scal
+
+   pure subroutine scal_kernel(m, n, alpha, u)
+      integer, intent(in) :: m, n
+      real(dp), intent(in) :: alpha
+      real(dp), intent(inout) :: u(0:m + 1, 0:n + 1)
+      integer :: i, j
+      do concurrent(i=1:m, j=1:n)
+         u(i, j) = alpha*u(i, j)
+      end do
+   end subroutine scal_kernel
 
    subroutine axpby(alpha, vec, beta, self)
       real(dp), intent(in) :: alpha, beta
@@ -84,11 +98,20 @@ contains
       integer :: i, j
       select type (vec)
       type is (vector)
-         do concurrent(i=0:nx + 1, j=0:ny + 1)
-            self%u(i, j) = alpha*vec%u(i, j) + beta*self%u(i, j)
-         end do
+         call axpby_kernel(nx, ny, alpha, vec%u, beta, self%u)
       end select
    end subroutine axpby
+
+   pure subroutine axpby_kernel(m, n, alpha, x, beta, y)
+      integer, intent(in) :: m, n
+      real(dp), intent(in) :: alpha, beta
+      real(dp), intent(in) :: x(0:m + 1, 0:n + 1)
+      real(dp), intent(inout) :: y(0:m + 1, 0:n + 1)
+      integer :: i, j
+      do concurrent(i=0:m + 1, j=0:n + 1)
+         y(i, j) = alpha*x(i, j) + beta*y(i, j)
+      end do
+   end subroutine axpby_kernel
 
    subroutine rand(self, ifnorm)
       class(vector), intent(inout) :: self
@@ -127,7 +150,6 @@ contains
       real(dp), dimension(0:m + 1, 0:n + 1), intent(in) :: u
       real(dp), dimension(0:m + 1, 0:n + 1), intent(out) :: v
       integer :: i, j
-
       !> Interior domain.
       do concurrent(i=1:m, j=1:n)
          v(i, j) = (-u(i + 1, j) + 2*u(i, j) - u(i - 1, j))/dx**2 &
