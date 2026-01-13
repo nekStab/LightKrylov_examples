@@ -69,7 +69,7 @@ contains
       real(dp), intent(in) :: u(0:m + 1, 0:n + 1), v(0:m + 1, 0:n + 1)
       integer :: i, j
       alpha = 0.0_dp
-      do concurrent(i=1:m, j=1:n)
+      do concurrent(i=0:m + 1, j=0:n + 1)
          alpha = alpha + u(i, j)*v(i, j)
       end do
       alpha = alpha*dx*dy
@@ -86,7 +86,7 @@ contains
       real(dp), intent(in) :: alpha
       real(dp), intent(inout) :: u(0:m + 1, 0:n + 1)
       integer :: i, j
-      do concurrent(i=1:m, j=1:n)
+      do concurrent(i=0:m + 1, j=0:n + 1)
          u(i, j) = alpha*u(i, j)
       end do
    end subroutine scal_kernel
