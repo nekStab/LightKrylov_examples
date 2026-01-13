@@ -3,6 +3,7 @@ program main
    use stdlib_io_npy, only: save_npy
    use LightKrylov, only: cg, cg_dp_opts
    use LightKrylov_Logger, only: logger_setup, check_info
+   use params
    use laplace
    implicit none
 
@@ -22,6 +23,9 @@ program main
    !----- INITIALIZATION -----
    !> Logging with LightKrylov.
    call logger_setup()
+
+   !> Initialize MPI.
+   info = initialize()
 
    !> Initialize right-hand side vector.
    f = create_rhs()
@@ -53,6 +57,8 @@ program main
 contains
    type(vector) function create_rhs() result(f)
       integer :: i, j
+      !> Allocate field.
+      allocate (f%u(istart - 1:iend + 1, jstart - 1:jend + 1))
       !> Forcing at the interior of the domain.
       call random_number(f%u)
       !> Normalize.

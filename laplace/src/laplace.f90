@@ -3,20 +3,13 @@ module laplace
    use stdlib_optval, only: optval
    use LightKrylov, only: abstract_vector_rdp, &
                           abstract_sym_linop_rdp
+   use params
    implicit none
    private
 
-   !> Number of points per direction.
-   integer, parameter, public :: nx = 128
-   integer, parameter, public :: ny = 128
-   real(dp), parameter, public :: Lx = 1.0_dp
-   real(dp), parameter, public :: Ly = 1.0_dp
-   real(dp), parameter, public :: dx = Lx/(nx + 1)
-   real(dp), parameter, public :: dy = Ly/(ny + 1)
-
    !> Derived-type for the vector.
    type, extends(abstract_vector_rdp), public :: vector
-      real(dp), dimension(0:nx + 1, 0:ny + 1) :: u
+      real(dp), allocatable :: u(:, :)
    contains
       procedure, pass(self), public :: zero
       procedure, pass(self), public :: dot
@@ -27,7 +20,7 @@ module laplace
    end type vector
 
    interface vector
-      pure module function initialize_vector(u) result(vec)
+      module function initialize_vector(u) result(vec)
          real(dp), intent(in) :: u(:, :)
          type(vector) :: vec
       end function initialize_vector
@@ -42,7 +35,7 @@ module laplace
 contains
 
    module procedure initialize_vector
-   vec%u = u
+   allocate (vec%u(istart - 1:iend + 1, jstart - 1:jend + 1), source=u)
    end procedure initialize_vector
 
    !---------------------------------------------------------
@@ -51,7 +44,11 @@ contains
 
    subroutine zero(self)
       class(vector), intent(inout) :: self
-      self%u = 0.0_dp
+      if (allocated(self%u)) then
+         self%u = 0.0_dp
+      else
+         allocate (self%u(istart - 1:iend + 1, jstart - 1:jend + 1), source=0.0_dp)
+      end if
    end subroutine zero
 
    real(dp) function dot(self, vec) result(alpha)
@@ -60,16 +57,16 @@ contains
       integer :: i, j
       select type (vec)
       type is (vector)
-         alpha = dot_kernel(nx, ny, self%u, vec%u)
+         alpha = dot_kernel(self%u, vec%u)
       end select
    end function dot
 
-   real(dp) pure function dot_kernel(m, n, u, v) result(alpha)
-      integer, intent(in) :: m, n
-      real(dp), intent(in) :: u(0:m + 1, 0:n + 1), v(0:m + 1, 0:n + 1)
+   real(dp) pure function dot_kernel(u, v) result(alpha)
+      real(dp), intent(in) :: u(istart - 1:iend + 1, jstart - 1:jend + 1)
+      real(dp), intent(in) :: v(istart - 1:iend + 1, jstart - 1:jend + 1)
       integer :: i, j
       alpha = 0.0_dp
-      do concurrent(i=0:m + 1, j=0:n + 1)
+      do concurrent(i=istart - 1:iend + 1, j=jstart - 1:jend + 1)
          alpha = alpha + u(i, j)*v(i, j)
       end do
       alpha = alpha*dx*dy
@@ -78,15 +75,14 @@ contains
    subroutine scal(self, alpha)
       class(vector), intent(inout) :: self
       real(dp), intent(in) :: alpha
-      call scal_kernel(nx, ny, alpha, self%u)
+      call scal_kernel(alpha, self%u)
    end subroutine scal
 
-   pure subroutine scal_kernel(m, n, alpha, u)
-      integer, intent(in) :: m, n
+   pure subroutine scal_kernel(alpha, u)
       real(dp), intent(in) :: alpha
-      real(dp), intent(inout) :: u(0:m + 1, 0:n + 1)
+      real(dp), intent(inout) :: u(istart - 1:iend + 1, jstart - 1:jend + 1)
       integer :: i, j
-      do concurrent(i=0:m + 1, j=0:n + 1)
+      do concurrent(i=istart - 1:iend + 1, j=jstart - 1:jend + 1)
          u(i, j) = alpha*u(i, j)
       end do
    end subroutine scal_kernel
@@ -98,17 +94,16 @@ contains
       integer :: i, j
       select type (vec)
       type is (vector)
-         call axpby_kernel(nx, ny, alpha, vec%u, beta, self%u)
+         call axpby_kernel(alpha, vec%u, beta, self%u)
       end select
    end subroutine axpby
 
-   pure subroutine axpby_kernel(m, n, alpha, x, beta, y)
-      integer, intent(in) :: m, n
+   pure subroutine axpby_kernel(alpha, x, beta, y)
       real(dp), intent(in) :: alpha, beta
-      real(dp), intent(in) :: x(0:m + 1, 0:n + 1)
-      real(dp), intent(inout) :: y(0:m + 1, 0:n + 1)
+      real(dp), intent(in) :: x(istart - 1:iend + 1, jstart - 1:jend + 1)
+      real(dp), intent(inout) :: y(istart - 1:iend + 1, jstart - 1:jend + 1)
       integer :: i, j
-      do concurrent(i=0:m + 1, j=0:n + 1)
+      do concurrent(i=istart - 1:iend + 1, j=jstart - 1:jend + 1)
          y(i, j) = alpha*x(i, j) + beta*y(i, j)
       end do
    end subroutine axpby_kernel
@@ -118,6 +113,7 @@ contains
       logical, optional, intent(in) :: ifnorm
       logical :: normalize
       normalize = optval(ifnorm, .false.)
+      if (.not. allocated(self%u)) allocate (self%u(istart - 1:iend + 1, jstart - 1:jend + 1))
       call random_number(self%u)
       if (normalize) self%u = self%norm()
    end subroutine rand
@@ -140,25 +136,27 @@ contains
       type is (vector)
          select type (vec_out)
          type is (vector)
-            call spmv_kernel(nx, ny, vec_in%u, vec_out%u)
+            !> Allocate return vector.
+            call vec_out%zero()
+            !> Matrix-vector product.
+            call spmv_kernel(vec_in%u, vec_out%u)
          end select
       end select
    end subroutine matvec
 
-   pure subroutine spmv_kernel(m, n, u, v)
-      integer, intent(in) :: m, n
-      real(dp), dimension(0:m + 1, 0:n + 1), intent(in) :: u
-      real(dp), dimension(0:m + 1, 0:n + 1), intent(out) :: v
+   pure subroutine spmv_kernel(u, v)
+      real(dp), dimension(istart - 1:iend + 1, jstart - 1:jend + 1), intent(in) :: u
+      real(dp), dimension(istart - 1:iend + 1, jstart - 1:jend + 1), intent(out) :: v
       integer :: i, j
       !> Interior domain.
-      do concurrent(i=1:m, j=1:n)
+      do concurrent(i=istart:iend, j=jstart:jend)
          v(i, j) = (-u(i + 1, j) + 2*u(i, j) - u(i - 1, j))/dx**2 &
                    + (-u(i, j + 1) + 2*u(i, j) - u(i, j - 1))/dy**2
       end do
       !> Top-bottom boundary conditions.
-      v(:, 0) = 0.0_dp; v(:, n + 1) = 0.0_dp
+      v(:, jstart - 1) = 0.0_dp; v(:, jend + 1) = 0.0_dp
       !> Left-right boundary conditions.
-      v(0, :) = 0.0_dp; v(m + 1, :) = 0.0_dp
+      v(istart - 1, :) = 0.0_dp; v(iend + 1, :) = 0.0_dp
    end subroutine spmv_kernel
 
 end module laplace
