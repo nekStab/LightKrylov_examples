@@ -1,4 +1,5 @@
 program main
+   use mpi_f08
    use stdlib_linalg_constants, only: dp
    use stdlib_io_npy, only: save_npy
    use LightKrylov, only: cg, cg_dp_opts
@@ -17,7 +18,7 @@ program main
    type(vector) :: u
 
    !> Miscellaneous.
-   integer :: info
+   integer :: info, i, j
    type(cg_dp_opts) :: opts
 
    !----- INITIALIZATION -----
@@ -44,27 +45,34 @@ program main
    ! ----- CHECK CONVERGENCE -----
    block
       type(vector) :: wrk
+      real(dp) :: residual
       call L%matvec(u, wrk)
       call wrk%sub(f)
-      print *
-      print *, "----------------------------------------"
-      print *, "Euclidean norm of the residual vector : ", wrk%norm()
-      print *, "----------------------------------------"
+      residual = wrk%norm()
+      if (nid == 0) then
+         print *
+         print *, "----------------------------------------"
+         print *, "Euclidean norm of the residual vector : ", residual
+         print *, "----------------------------------------"
+      end if
    end block
 
-   call save_npy("solution.npy", u%u)
+   info = finalize()
+
+   ! call save_npy("solution.npy", u%u)
 
 contains
    type(vector) function create_rhs() result(f)
       integer :: i, j
       !> Allocate field.
-      allocate (f%u(istart - 1:iend + 1, jstart - 1:jend + 1))
+      allocate (f%u(istart - 1:iend + 1, jstart - 1:jend + 1), source=1.0_dp)
       !> Forcing at the interior of the domain.
-      call random_number(f%u)
+      !call random_number(f%u)
       !> Normalize.
-      call f%scal(1.0_dp/f%norm())
+      ! call f%scal(1.0_dp/f%norm())
       !> Boundary points are not actual degrees of freedom.
-      f%u(0, :) = 0.0_dp; f%u(nx + 1, :) = 0.0_dp
-      f%u(:, 0) = 0.0_dp; f%u(:, ny + 1) = 0.0_dp
+      f%u(istart - 1, :) = 0.0_dp; f%u(iend + 1, :) = 0.0_dp
+      f%u(:, jstart - 1) = 0.0_dp; f%u(:, jend + 1) = 0.0_dp
+      call exchange_halo(f%u)
    end function create_rhs
 end program main

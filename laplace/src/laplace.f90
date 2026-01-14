@@ -1,4 +1,5 @@
 module laplace
+   use mpi_f08
    use stdlib_linalg_constants, only: dp
    use stdlib_optval, only: optval
    use LightKrylov, only: abstract_vector_rdp, &
@@ -20,9 +21,8 @@ module laplace
    end type vector
 
    interface vector
-      module function initialize_vector(u) result(vec)
+      type(vector) module function initialize_vector(u) result(vec)
          real(dp), intent(in) :: u(:, :)
-         type(vector) :: vec
       end function initialize_vector
    end interface vector
 
@@ -36,6 +36,7 @@ contains
 
    module procedure initialize_vector
    allocate (vec%u(istart - 1:iend + 1, jstart - 1:jend + 1), source=u)
+   call exchange_halo(vec%u)
    end procedure initialize_vector
 
    !---------------------------------------------------------
@@ -54,10 +55,12 @@ contains
    real(dp) function dot(self, vec) result(alpha)
       class(vector), intent(in) :: self
       class(abstract_vector_rdp), intent(in) :: vec
+      real(dp) :: alpha_local
       integer :: i, j
       select type (vec)
       type is (vector)
-         alpha = dot_kernel(self%u, vec%u)
+         alpha_local = dot_kernel(self%u, vec%u)
+         call mpi_allreduce(alpha_local, alpha, 1, dp_type, mpi_sum, world)
       end select
    end function dot
 
@@ -66,7 +69,7 @@ contains
       real(dp), intent(in) :: v(istart - 1:iend + 1, jstart - 1:jend + 1)
       integer :: i, j
       alpha = 0.0_dp
-      do concurrent(i=istart - 1:iend + 1, j=jstart - 1:jend + 1)
+      do concurrent(i=istart:iend, j=jstart:jend)
          alpha = alpha + u(i, j)*v(i, j)
       end do
       alpha = alpha*dx*dy
@@ -115,7 +118,8 @@ contains
       normalize = optval(ifnorm, .false.)
       if (.not. allocated(self%u)) allocate (self%u(istart - 1:iend + 1, jstart - 1:jend + 1))
       call random_number(self%u)
-      if (normalize) self%u = self%norm()
+      call exchange_halo(self%u)
+      if (normalize) call self%scal(1.0_dp/self%norm())
    end subroutine rand
 
    integer function get_size(self) result(n)
@@ -131,6 +135,7 @@ contains
       class(Laplacian), intent(inout) :: self
       class(abstract_vector_rdp), intent(in) :: vec_in
       class(abstract_vector_rdp), intent(out) :: vec_out
+      real(dp), dimension(istart - 1:iend + 1, jstart - 1:jend + 1) :: u
       integer :: i, j
       select type (vec_in)
       type is (vector)
@@ -138,8 +143,12 @@ contains
          type is (vector)
             !> Allocate return vector.
             call vec_out%zero()
+            !> Local variable (circumventing the intent(in) statement).
+            u = vec_in%u
+            !> Exchange halos.
+            call exchange_halo(u)
             !> Matrix-vector product.
-            call spmv_kernel(vec_in%u, vec_out%u)
+            call spmv_kernel(u, vec_out%u)
          end select
       end select
    end subroutine matvec
@@ -154,9 +163,11 @@ contains
                    + (-u(i, j + 1) + 2*u(i, j) - u(i, j - 1))/dy**2
       end do
       !> Top-bottom boundary conditions.
-      v(:, jstart - 1) = 0.0_dp; v(:, jend + 1) = 0.0_dp
+      if (jstart == 1) v(:, jstart - 1) = 0.0_dp
+      if (jend == ny) v(:, jend + 1) = 0.0_dp
       !> Left-right boundary conditions.
-      v(istart - 1, :) = 0.0_dp; v(iend + 1, :) = 0.0_dp
+      if (istart == 1) v(istart - 1, :) = 0.0_dp
+      if (iend == nx) v(iend + 1, :) = 0.0_dp
    end subroutine spmv_kernel
 
 end module laplace
