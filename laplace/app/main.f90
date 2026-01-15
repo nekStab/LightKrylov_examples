@@ -63,16 +63,13 @@ program main
 
 contains
    type(vector) function create_rhs() result(f)
-      integer :: i, j
-      !> Allocate field.
+      !> Allocate constant forcing field.
       allocate (f%u(istart - 1:iend + 1, jstart - 1:jend + 1), source=1.0_dp)
-      !> Forcing at the interior of the domain.
-      !call random_number(f%u)
-      !> Normalize.
-      ! call f%scal(1.0_dp/f%norm())
       !> Boundary points are not actual degrees of freedom.
-      f%u(istart - 1, :) = 0.0_dp; f%u(iend + 1, :) = 0.0_dp
-      f%u(:, jstart - 1) = 0.0_dp; f%u(:, jend + 1) = 0.0_dp
+      if (istart == 1) f%u(istart - 1, :) = 0.0_dp
+      if (iend == nx) f%u(iend + 1, :) = 0.0_dp
+      if (jstart == 1) f%u(:, jstart - 1) = 0.0_dp
+      if (jend == ny) f%u(:, jend + 1) = 0.0_dp
       call exchange_halo(f%u)
    end function create_rhs
 end program main

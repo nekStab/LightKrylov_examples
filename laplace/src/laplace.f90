@@ -60,7 +60,7 @@ contains
       select type (vec)
       type is (vector)
          alpha_local = dot_kernel(self%u, vec%u)
-         call mpi_allreduce(alpha_local, alpha, 1, dp_type, mpi_sum, world)
+         call mpi_allreduce(alpha_local, alpha, 1, dp_type, mpi_sum, world, code)
       end select
    end function dot
 
@@ -85,7 +85,7 @@ contains
       real(dp), intent(in) :: alpha
       real(dp), intent(inout) :: u(istart - 1:iend + 1, jstart - 1:jend + 1)
       integer :: i, j
-      do concurrent(i=istart - 1:iend + 1, j=jstart - 1:jend + 1)
+      do concurrent(i=istart:iend, j=jstart:jend)
          u(i, j) = alpha*u(i, j)
       end do
    end subroutine scal_kernel
@@ -94,7 +94,6 @@ contains
       real(dp), intent(in) :: alpha, beta
       class(abstract_vector_rdp), intent(in) :: vec
       class(vector), intent(inout) :: self
-      integer :: i, j
       select type (vec)
       type is (vector)
          call axpby_kernel(alpha, vec%u, beta, self%u)
@@ -106,7 +105,7 @@ contains
       real(dp), intent(in) :: x(istart - 1:iend + 1, jstart - 1:jend + 1)
       real(dp), intent(inout) :: y(istart - 1:iend + 1, jstart - 1:jend + 1)
       integer :: i, j
-      do concurrent(i=istart - 1:iend + 1, j=jstart - 1:jend + 1)
+      do concurrent(i=istart:iend, j=jstart:jend)
          y(i, j) = alpha*x(i, j) + beta*y(i, j)
       end do
    end subroutine axpby_kernel

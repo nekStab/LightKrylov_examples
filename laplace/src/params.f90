@@ -11,9 +11,9 @@ module params
    !---------------------------------
 
    !> Number of points in the horizontal direction.
-   integer, parameter, public :: nx = 512
+   integer, parameter, public :: nx = 128
    !> Number of points in the vertical direction.
-   integer, parameter, public :: ny = 512
+   integer, parameter, public :: ny = 128
    !> Domain length in the horizontal direction.
    real(dp), parameter, public :: Lx = 1.0_dp
    !> Domain length in the vertical direction.
@@ -63,7 +63,7 @@ module params
       integer module function initialize() result(status)
       end function initialize
 
-      module function finalize() result(status)
+      integer module function finalize() result(status)
       end function finalize
 
       module subroutine exchange_halo(u)
@@ -117,9 +117,9 @@ contains
 
    !> Derived-type for communications.
    call mpi_type_create_f90_real(precision(1.0_dp), range(1.0_dp), dp_type)
-   call mpi_type_vector(jend - jstart + 1, 1, iend - istart + 3, dp_type, row_type)
+   call mpi_type_vector(ny_, 1, nx_ + 2, dp_type, row_type)
    call mpi_type_commit(row_type)
-   call mpi_type_contiguous(iend - istart + 1, dp_type, col_type)
+   call mpi_type_contiguous(nx_, dp_type, col_type)
    call mpi_type_commit(col_type)
 
    !> Return flag.
