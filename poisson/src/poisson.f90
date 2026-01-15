@@ -1,4 +1,4 @@
-module laplace
+module poisson
    use mpi_f08
    use stdlib_linalg_constants, only: dp
    use stdlib_optval, only: optval
@@ -199,4 +199,4 @@ contains
       end select
    end subroutine apply_precond
 
-end module laplace
+end module poisson

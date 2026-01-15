@@ -5,7 +5,7 @@ program main
    use LightKrylov, only: cg, cg_dp_opts
    use LightKrylov_Logger, only: logger_setup, check_info
    use params
-   use laplace
+   use poisson
    implicit none
 
    character(len=128), parameter :: this_module = "Poisson solver"
