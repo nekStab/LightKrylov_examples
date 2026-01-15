@@ -73,12 +73,11 @@ module params
    public :: initialize
    public :: finalize
    public :: exchange_halo
-contains
-   module procedure initialize
-   !---------------------------------------------
-   !-----     GLOBAL MPI INITIALIZATION     -----
-   !---------------------------------------------
 
+contains
+
+   module procedure initialize
+   !-----     GLOBAL MPI INITIALIZATION     -----
    !> Initialize MPI.
    call mpi_init()
    !> Size of the MPI communicator.
@@ -94,18 +93,12 @@ contains
    call mpi_cart_shift(world, 0, 1, neighbors(W), neighbors(E))
    call mpi_cart_shift(world, 1, 1, neighbors(S), neighbors(N))
 
-   !--------------------------------------------------
    !-----     LET LIGHTKRYLOV KNOW ABOUT MPI     -----
-   !--------------------------------------------------
-
    call set_comm_size(nprocs)
    call set_rank(nid)
    call set_io_rank(0)
 
-   !----------------------------------------
    !-----     LOCAL SUBDOMAIN DATA     -----
-   !----------------------------------------
-
    !> Sets the number of points in each direction of the subdomain.
    nx_ = nx/dims(1); ny_ = ny/dims(2)
    !> Set the starting and final index in the horizontal direction.
@@ -137,21 +130,21 @@ contains
    module procedure exchange_halo
    integer, parameter :: tag = 100
    type(mpi_status) :: status
-   !> Send to north and receive from south.
-   call mpi_sendrecv(u(istart, jstart), 1, row_type, neighbors(N), tag, &
-                     u(iend + 1, jstart), 1, row_type, neighbors(S), tag, &
-                     world, status)
-   !> Send to south and receive from north.
-   call mpi_sendrecv(u(iend, jstart), 1, row_type, neighbors(S), tag, &
-                     u(istart - 1, jstart), 1, row_type, neighbors(N), tag, &
-                     world, status)
    !> Send to west and receive from east.
-   call mpi_sendrecv(u(istart, jstart), 1, col_type, neighbors(W), tag, &
-                     u(istart, jend + 1), 1, col_type, neighbors(E), tag, &
+   call mpi_sendrecv(u(istart, jstart), 1, row_type, neighbors(W), tag, &
+                     u(iend + 1, jstart), 1, row_type, neighbors(E), tag, &
                      world, status)
    !> Send to east and receive from west.
-   call mpi_sendrecv(u(istart, jend), 1, col_type, neighbors(E), tag, &
-                     u(istart, jstart - 1), 1, col_type, neighbors(W), tag, &
+   call mpi_sendrecv(u(iend, jstart), 1, row_type, neighbors(E), tag, &
+                     u(istart - 1, jstart), 1, row_type, neighbors(W), tag, &
+                     world, status)
+   !> Send to south and receive from north.
+   call mpi_sendrecv(u(istart, jstart), 1, col_type, neighbors(S), tag, &
+                     u(istart, jend + 1), 1, col_type, neighbors(N), tag, &
+                     world, status)
+   !> Send to north and receive from south.
+   call mpi_sendrecv(u(istart, jend), 1, col_type, neighbors(N), tag, &
+                     u(istart, jstart - 1), 1, col_type, neighbors(S), tag, &
                      world, status)
    end procedure exchange_halo
 end module params

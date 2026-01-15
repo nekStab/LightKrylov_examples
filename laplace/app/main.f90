@@ -18,15 +18,15 @@ program main
    type(vector) :: u
 
    !> Miscellaneous.
-   integer :: info, i, j
+   integer :: info
    type(cg_dp_opts) :: opts
 
    !----- INITIALIZATION -----
-   !> Logging with LightKrylov.
-   call logger_setup()
-
    !> Initialize MPI.
    info = initialize()
+
+   !> Logging with LightKrylov.
+   call logger_setup()
 
    !> Initialize right-hand side vector.
    f = create_rhs()
