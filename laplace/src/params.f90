@@ -37,9 +37,9 @@ module params
    integer, dimension(ndim) :: coords
    logical, dimension(ndim), parameter :: periods = .false.
    logical, parameter :: reorganisation = .true.
-   integer, parameter, public :: N = 1, E = 2, S = 3, W = 4
+   integer, parameter :: N = 1, E = 2, S = 3, W = 4
    !> Neighbourhood.
-   integer, dimension(4), public :: neighbors
+   integer, dimension(4) :: neighbors
    !> Derived-types for halo exchanges.
    type(mpi_datatype), public :: dp_type
    type(mpi_datatype) :: row_type, col_type
