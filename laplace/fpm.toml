@@ -24,3 +24,4 @@ source-form = "free"
 stdlib      = "*"
 mpi         = "*"
 LightKrylov = {git="https://github.com/nekStab/LightKrylov.git"}
+SpecialMatrices = {git="https://github.com/loiseaujc/SpecialMatrices.git"}

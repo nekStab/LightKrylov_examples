@@ -2,8 +2,11 @@ module laplace
    use mpi_f08
    use stdlib_linalg_constants, only: dp
    use stdlib_optval, only: optval
+   use specialmatrices, only: tridiagonal, solve
    use LightKrylov, only: abstract_vector_rdp, &
-                          abstract_sym_linop_rdp
+                          abstract_sym_linop_rdp, &
+                          abstract_precond_rdp
+
    use params
    implicit none
    private
@@ -31,6 +34,12 @@ module laplace
    contains
       procedure, pass(self), public :: matvec
    end type Laplacian
+
+   !> Derived-type for the preconditionner.
+   type, extends(abstract_precond_rdp), public :: blk_jacobi_precond
+   contains
+      procedure, pass(self), public :: apply => apply_precond
+   end type
 
 contains
 
@@ -168,5 +177,26 @@ contains
       if (istart == 1) v(istart - 1, :) = 0.0_dp
       if (iend == nx) v(iend + 1, :) = 0.0_dp
    end subroutine spmv_kernel
+
+   !----------------------------------------------------------------
+   !-----     TYPE-BOUND PROCEDURE FOR THE PRECONDITIONNER     -----
+   !----------------------------------------------------------------
+
+   subroutine apply_precond(self, vec, iter, current_residual, target_residual)
+      class(blk_jacobi_precond), intent(inout) :: self
+      class(abstract_vector_rdp), intent(inout) :: vec
+      integer, optional, intent(in) :: iter
+      real(dp), optional, intent(in) :: current_residual, target_residual
+      !> Internal variables.
+      type(tridiagonal) :: M
+
+      !> Initialize local matrix.
+      M = tridiagonal(-1.0/dx**2, 4.0/dx**2, -1.0/dx**2, nx_)
+      !> Solve block system.
+      select type (vec)
+      type is (vector)
+         vec%u(istart:iend, :) = solve(M, vec%u(istart:iend, :))
+      end select
+   end subroutine apply_precond
 
 end module laplace

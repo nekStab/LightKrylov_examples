@@ -12,6 +12,8 @@ program main
 
    !> 2D Laplacian operator.
    type(Laplacian) :: L
+   !> Preconditioner.
+   type(blk_jacobi_precond) :: P
    !> Forcing term.
    type(vector) :: f
    !> Solution vector.
@@ -37,8 +39,8 @@ program main
    !----- SOLVE POISSON EQUATION -----
    !> Sets options for the conjugate gradient solver.
    opts = cg_dp_opts(maxiter=nx*ny, if_print_metadata=.false.)
-   !> Solve the linear system.
-   call cg(L, f, u, info, options=opts)
+   !> Solve the linear system with block Jacobi preconditioning.
+   call cg(L, f, u, info, preconditioner=P, rtol=epsilon(1.0_dp), options=opts)
    !> Sanity check.
    call check_info(info, "cg", module=this_module, procedure="main")
 
@@ -70,6 +72,8 @@ contains
       if (iend == nx) f%u(iend + 1, :) = 0.0_dp
       if (jstart == 1) f%u(:, jstart - 1) = 0.0_dp
       if (jend == ny) f%u(:, jend + 1) = 0.0_dp
+      !> Normalize.
+      call f%scal(1.0_dp/f%norm())
       call exchange_halo(f%u)
    end function create_rhs
 end program main

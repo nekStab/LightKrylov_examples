@@ -77,12 +77,14 @@ module params
 contains
 
    module procedure initialize
+   integer :: i
    !-----     GLOBAL MPI INITIALIZATION     -----
    !> Initialize MPI.
    call mpi_init()
    !> Size of the MPI communicator.
    call mpi_comm_size(mpi_comm_world, nprocs)
    !> Number of processes along each direction.
+   !dims(1) = 1; dims(2) = nprocs; call mpi_dims_create(nprocs, ndim, dims)
    dims = 0; call mpi_dims_create(nprocs, ndim, dims)
    !> Create cartesian topology.
    call mpi_cart_create(mpi_comm_world, ndim, dims, periods, reorganisation, world)
