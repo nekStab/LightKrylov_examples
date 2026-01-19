@@ -19,9 +19,9 @@ module params
    !> Domain length in the vertical direction.
    real(dp), parameter, public :: Ly = 1.0_dp
    !> Grid spacing in the horizontal direction.
-   real(dp), parameter, public :: dx = Lx/(nx + 1)
+   real(dp), parameter, public :: dx = Lx/(nx + 1), inv_dx2 = 1.0_dp/dx**2
    !> Grid spacing in the vertical direction.
-   real(dp), parameter, public :: dy = Ly/(ny + 1)
+   real(dp), parameter, public :: dy = Ly/(ny + 1), inv_dy2 = 1.0_dp/dy**2
 
    !---------------------------------
    !-----     MPI VARIABLES     -----

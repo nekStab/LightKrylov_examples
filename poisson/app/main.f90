@@ -36,6 +36,9 @@ program main
    !> Set the initial guess to zero.
    call u%zero()
 
+   !> Initialize preconditioner.
+   P = preconditioner()
+
    !----- SOLVE POISSON EQUATION -----
    !> Sets options for the conjugate gradient solver.
    opts = cg_dp_opts(maxiter=nx*ny, if_print_metadata=.false.)
