@@ -1,4 +1,4 @@
-# Solving the Poisson equation on the unit-square with preconditioner conjugate gradient
+# Solving the Poisson equation on the unit-square with preconditioned conjugate gradient
 
 This project demonstrates a minimal example of solving the two‑dimensional Poisson equation with a block‑Jacobi preconditioner, using the **LightKrylov** library as a linear‑algebra abstraction layer.
 
