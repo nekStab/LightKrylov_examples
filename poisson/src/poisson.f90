@@ -1,13 +1,19 @@
 module poisson
    use mpi_f08
+   !> Fortran Standard Library.
    use stdlib_linalg_constants, only: dp
    use stdlib_optval, only: optval
-   use specialmatrices, only: tridiagonal, solve
+   !> SpecialMatrices package.
+   use specialmatrices, only: tridiagonal, solve            ! For block Jacobi preconditioner.
+   !> LightKrylov
    use LightKrylov, only: abstract_vector_rdp, &
                           abstract_sym_linop_rdp, &
                           abstract_precond_rdp
-
-   use params
+   !> Current solver.
+   use params, only: dx, dy, inv_dx2, inv_dy2, &            ! Grid spacing.
+                     nx, ny, nx_, ny_, &                    ! Global and local grid size.
+                     istart, iend, jstart, jend, &          ! Local indices
+                     code, world, dp_type, exchange_halo    ! MPI-related
    implicit none
    private
 
@@ -37,9 +43,15 @@ module poisson
 
    !> Derived-type for the preconditionner.
    type, extends(abstract_precond_rdp), public :: blk_jacobi_precond
+      type(tridiagonal) :: M
    contains
       procedure, pass(self), public :: apply => apply_precond
    end type
+   interface preconditioner
+      type(blk_jacobi_precond) pure module function initialize_preconditioner() result(P)
+      end function initialize_preconditioner
+   end interface
+   public :: preconditioner
 
 contains
 
@@ -47,6 +59,20 @@ contains
    allocate (vec%u(istart - 1:iend + 1, jstart - 1:jend + 1), source=u)
    call exchange_halo(vec%u)
    end procedure initialize_vector
+
+   module procedure initialize_preconditioner
+   P%M = tridiagonal(-1/dx**2, 4/dx**2, -1/dx**2, nx_)
+   end procedure
+
+   pure subroutine apply_boundary_conditions(u)
+      real(dp), intent(inout) :: u(istart - 1:iend + 1, jstart - 1:jend + 1)
+      !> Top-bottom boundary conditions.
+      if (jstart == 1) u(:, jstart - 1) = 0.0_dp
+      if (jend == ny) u(:, jend + 1) = 0.0_dp
+      !> Left-right boundary conditions.
+      if (istart == 1) u(istart - 1, :) = 0.0_dp
+      if (iend == nx) u(iend + 1, :) = 0.0_dp
+   end subroutine apply_boundary_conditions
 
    !---------------------------------------------------------
    !-----     TYPE-BOUND PROCEDURE FOR DERIVED TYPE     -----
@@ -94,7 +120,7 @@ contains
       real(dp), intent(in) :: alpha
       real(dp), intent(inout) :: u(istart - 1:iend + 1, jstart - 1:jend + 1)
       integer :: i, j
-      do concurrent(i=istart:iend, j=jstart:jend)
+      do concurrent(i=istart - 1:iend + 1, j=jstart - 1:jend + 1)
          u(i, j) = alpha*u(i, j)
       end do
    end subroutine scal_kernel
@@ -114,7 +140,7 @@ contains
       real(dp), intent(in) :: x(istart - 1:iend + 1, jstart - 1:jend + 1)
       real(dp), intent(inout) :: y(istart - 1:iend + 1, jstart - 1:jend + 1)
       integer :: i, j
-      do concurrent(i=istart:iend, j=jstart:jend)
+      do concurrent(i=istart - 1:iend + 1, j=jstart - 1:jend + 1)
          y(i, j) = alpha*x(i, j) + beta*y(i, j)
       end do
    end subroutine axpby_kernel
@@ -125,9 +151,9 @@ contains
       logical :: normalize
       normalize = optval(ifnorm, .false.)
       if (.not. allocated(self%u)) allocate (self%u(istart - 1:iend + 1, jstart - 1:jend + 1))
-      call random_number(self%u)
-      call exchange_halo(self%u)
+      call random_number(self%u(istart:iend, jstart:jend))
       if (normalize) call self%scal(1.0_dp/self%norm())
+      call exchange_halo(self%u)
    end subroutine rand
 
    integer function get_size(self) result(n)
@@ -143,20 +169,16 @@ contains
       class(Laplacian), intent(inout) :: self
       class(abstract_vector_rdp), intent(in) :: vec_in
       class(abstract_vector_rdp), intent(out) :: vec_out
-      real(dp), dimension(istart - 1:iend + 1, jstart - 1:jend + 1) :: u
-      integer :: i, j
       select type (vec_in)
       type is (vector)
          select type (vec_out)
          type is (vector)
             !> Allocate return vector.
             call vec_out%zero()
-            !> Local variable (circumventing the intent(in) statement).
-            u = vec_in%u
-            !> Exchange halos.
-            call exchange_halo(u)
             !> Matrix-vector product.
-            call spmv_kernel(u, vec_out%u)
+            call spmv_kernel(vec_in%u, vec_out%u)
+            !> Exchange halos.
+            call exchange_halo(vec_out%u)
          end select
       end select
    end subroutine matvec
@@ -164,18 +186,15 @@ contains
    pure subroutine spmv_kernel(u, v)
       real(dp), dimension(istart - 1:iend + 1, jstart - 1:jend + 1), intent(in) :: u
       real(dp), dimension(istart - 1:iend + 1, jstart - 1:jend + 1), intent(out) :: v
+      real(dp) :: tmp
       integer :: i, j
       !> Interior domain.
       do concurrent(i=istart:iend, j=jstart:jend)
-         v(i, j) = (-u(i + 1, j) + 2*u(i, j) - u(i - 1, j))/dx**2 &
-                   + (-u(i, j + 1) + 2*u(i, j) - u(i, j - 1))/dy**2
+         tmp = 2*u(i, j)
+         v(i, j) = (-u(i + 1, j) + tmp - u(i - 1, j))*inv_dx2 &
+                   + (-u(i, j + 1) + tmp - u(i, j - 1))*inv_dy2
       end do
-      !> Top-bottom boundary conditions.
-      if (jstart == 1) v(:, jstart - 1) = 0.0_dp
-      if (jend == ny) v(:, jend + 1) = 0.0_dp
-      !> Left-right boundary conditions.
-      if (istart == 1) v(istart - 1, :) = 0.0_dp
-      if (iend == nx) v(iend + 1, :) = 0.0_dp
+      call apply_boundary_conditions(v)
    end subroutine spmv_kernel
 
    !----------------------------------------------------------------
@@ -187,15 +206,11 @@ contains
       class(abstract_vector_rdp), intent(inout) :: vec
       integer, optional, intent(in) :: iter
       real(dp), optional, intent(in) :: current_residual, target_residual
-      !> Internal variables.
-      type(tridiagonal) :: M
-
-      !> Initialize local matrix.
-      M = tridiagonal(-1.0/dx**2, 4.0/dx**2, -1.0/dx**2, nx_)
       !> Solve block system.
       select type (vec)
       type is (vector)
-         vec%u(istart:iend, :) = solve(M, vec%u(istart:iend, :))
+         vec%u(istart:iend, :) = solve(self%M, vec%u(istart:iend, :))
+         call exchange_halo(vec%u)
       end select
    end subroutine apply_precond
 
