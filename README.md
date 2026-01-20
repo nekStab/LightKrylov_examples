@@ -7,4 +7,4 @@ A list of the different examples with a quick description is given below.
 
 - [`poisson`](https://github.com/nekStab/LightKrylov_examples/tree/main/poisson) : Showcases how to implement a simple MPI-based Poisson solver for the regular 5-points finite-difference discretization of the Laplace operator on the unit-square.
 
-- [`neklan`](https://github.com/nekStab/LightKrylov_examples/tree/main/neklab) : Showcases how `LightKrylov` can be integrated into an already existing relatively large code base. The example computes the (unstable) steady solution of the nonlinear incompressible Navier-Stokes equations as well as the leading eigenpairs of the associated linearized operator.
+- [`neklab`](https://github.com/nekStab/LightKrylov_examples/tree/main/neklab) : Showcases how `LightKrylov` can be integrated into an already existing relatively large code base. The example computes the (unstable) steady solution of the nonlinear incompressible Navier-Stokes equations as well as the leading eigenpairs of the associated linearized operator.
