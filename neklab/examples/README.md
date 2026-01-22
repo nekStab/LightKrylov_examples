@@ -22,6 +22,22 @@ To run the case:
 * generate the processor map file `1cyl.ma2` using the tool `genmap` distributed together with `Nek5000`.
 * run the code using the parallel executable provided in `Nek5000/bin/`.
 
+To run on 12 cores in the foreground with `nek5000` logfile output to stdout:
+```
+nekmpi 1cyl 12
+```
+To run on 12 cores in the background with `nek5000` logfile output to `logfile`:
+```
+nekbmpi 1cyl 12
+```
+The `nek5000` logfile contains runtime information for each timestep. The information about the progress of the algorithms from `LightKrylov` are output to `lightkrylov.log`.
+
+**Note**: The executable that is compiled with the default settings can only be run on 12 cores (or more) since the static array dimensions are chosen appropriately. To run on fewer cores, change the line
+```
+parameter (lpmin=12)              ! min number of MPI ranks
+```
+in the `SIZE` file and recompile.
+
 # Example list
 * `Newton-GMRES`: Newton-Krylov iteration to find the steady fixed-point of the nonlinear Navier-Stokes equations for the supercritical cylinder flow at Re=100.
 * `eigs`: Krylov-Schur eigenvalue iteration to find the leading eigenpair of the exponential propagator of the linearized Navier-Stokes operator around the steady fixed-point of the supercritical cylinder flow at Re=100. 
