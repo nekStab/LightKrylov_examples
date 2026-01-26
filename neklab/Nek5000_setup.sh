@@ -33,7 +33,7 @@ fi
 # Install dependencies
 echo ""
 echo "The following packages are needed to compile neklab:"
-echo "    - a fortran compiler (gfortran 14.3 is known to work)"
+echo "    - a fortran compiler (gfortran 14.3 and newer are known to work)"
 echo "    - MPI (either mpich or openmpi)"
 echo "    - make (or cmake)"
 echo ""
@@ -58,15 +58,15 @@ if [ "$confirm" == "y" ] || [ "$confirm" == "Y" ]; then
     case "$PM" in
         conda)
             conda config --add channels conda-forge
-            conda install -y cmake gfortran openmpi
+            conda install -y cmake gfortran openmpi blas lapack
             ;;
         apt)
             sudo apt -y update
-            sudo apt install build-essential gfortran libopenmpi-dev cmake
+            sudo apt install build-essential gfortran libopenmpi-dev cmake blas lapack
             ;;
         brew)
             brew update
-            brew install gcc open-mpi cmake libx11 libxt
+            brew install gcc open-mpi cmake libx11 libxt blas lapack
             ;;
     esac
 else
