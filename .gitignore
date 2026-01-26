@@ -44,7 +44,7 @@
 neklab/Nek5000
 neklab/LightKrylov
 neklab/examples/*/*.ma2
-neklab/examples/*/*.log
+neklab/examples/*/*log*
 neklab/examples/*/makefile*
 neklab/examples/*/*.nek5000
 neklab/examples/*/1cyl.re2
