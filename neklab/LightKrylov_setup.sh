@@ -1,100 +1,102 @@
 #!/bin/bash
 
-# Welcome message
+# LightKrylov Setup Script – custom version
 echo "LightKrylov Setup Script"
-echo "--------------------"
-echo "This script will perform the following actions upon your confirmation:"
-echo "1. Remove existing LightKrylov directory (if found)."
-echo "2. Clone the LightKrylov repository."
-echo "3. Build and export LightKrylov."
-echo "4. Run the LightKrylov unit-tests."
-echo "--------------------"
+echo "-----------------------"
+echo "This script will:"
+echo "1. Install fpm with the desired package manager (if desired)."
+echo "2. Clone the LightKrylov repository (if desired)."
+echo "3. Build and optionally test LightKrylov."
+echo "-----------------------"
 
-# Detect the operating system
-OS=$(uname)
-should_clone="no"
+# Install dependencies if the user agrees
+read -p "Do you need to install fpm ? (y/n): " confirm
+    if [[ "$confirm" =~ ^[yY]$ ]]; then
+    # Ask the user for a package manager to install fpm
+    echo "Select the package manager to install fpm:"
+    echo "  1) conda"
+    echo "  2) brew"
+    echo "  3) pip"
+    echo "  4) spack"
+    read -p "Enter the number of your choice: " pm_choice
 
-# Install dependencies
-read -p "Do you want to install/update necessary packages? (y/n): " confirm
-if [ "$confirm" == "y" ] || [ "$confirm" == "Y" ]; then
-    echo "Installing dependencies..."
-    if [ "$OS" == "Linux" ]; then
+    case "$pm_choice" in
+      1) PM="conda" ;;
+      2) PM="brew" ;;
+      3) PM="pip" ;;
+      4) PM="spack" ;;
+      *) echo "Invalid choice. Exiting."; exit 1 ;;
+    esac
+
+    echo "You selected $PM to install fpm."
+
+    echo "Installing dependencies with $PM..."
+    case "$PM" in
+      conda)
         conda config --add channels conda-forge
-        conda install fpm
-    elif [ "$OS" == "Darwin" ]; then
+        conda install -y fpm
+        ;;
+      brew)
         brew tap fortran-lang/fortran
         brew update
         brew install fpm
-    else
-        echo "Unsupported operating system. Exiting."
-        exit 1
-    fi
+        ;;
+      pip)
+        # fpm is available on PyPI.
+        pip install --upgrade fpm
+        ;;
+      spack)
+        # Assume spack is already installed and configured
+        spack install fpm
+        ;;
+    esac
 else
     echo "Skipping dependencies installation."
 fi
 
-# Check for existing Nek5000 directory
+# Check for existing LightKrylov directory
 if [ -d "LightKrylov" ]; then
-    read -p "Directory LightKrylov exists. Do you want to remove it? (y/n): " confirm
-    if [ "$confirm" == "y" ] || [ "$confirm" == "Y" ]; then
+    read -p "Directory LightKrylov exists. Remove it? (y/n): " confirm
+    if [[ "$confirm" =~ ^[yY]$ ]]; then
         echo "Removing LightKrylov directory..."
         rm -rf LightKrylov
-        should_clone="yes"
+        clone_needed="yes"
     else
-        echo "LightKrylov directory will be retained."
+        echo "Retaining existing LightKrylov directory."
+        clone_needed="no"
     fi
 else
-    should_clone="yes"
+    clone_needed="yes"
 fi
 
-# Clone LightKrylov repository
-if [ "$should_clone" == "yes" ]; then
-    read -p "Do you want to clone the LightKrylov repository? (y/n): " confirm
-    if [ "$confirm" == "y" ] || [ "$confirm" == "Y" ]; then
-        echo "Cloning LightKrylov repository..."
+# Clone LightKrylov if needed
+if [ "$clone_needed" = "yes" ]; then
+    read -p "Clone the LightKrylov repository? (y/n): " confirm
+    if [[ "$confirm" =~ ^[yY]$ ]]; then
+        echo "Cloning LightKrylov..."
         git clone https://github.com/nekStab/LightKrylov.git
         cd LightKrylov
         git checkout -b pinned-version dcd85b3e027e2cda016e1f48d8a28f146c9eb5b3
     else
         echo "Skipping cloning."
+        echo "Ensure LightKrylov directory is present for subsequent steps."
     fi
 else
     cd LightKrylov
 fi
 
-
-
-
-############################################
-######                                 #####
-######     INSTALLING LIGHT KRYLOV     #####
-######                                 #####
-############################################
-
-# Automatically clean-up previous builds.
+# Clean any previous builds
 fpm clean --all
 
-# Sets the compilation options depending on the detected compiler.
-if command -v mpiifort >/dev/null 2>&1; then
-    FPM_FFLAGS="-Ofast -xHost -g -traceback"
-    FPM_FC="mpiifort"
-else
-    FPM_FFLAGS="-march=native -O3 -funroll-loops -DMPI"
-    FPM_FC="mpifort"
+# Build and install LightKrylov
+echo "Installing LightKrylov..."
+fpm install --profile release
+
+# Run unit tests if desired
+read -p "Run LightKrylov unit tests? (y/n): " confirm
+if [[ "$confirm" =~ ^[yY]$ ]]; then
+    fpm test --profile release
 fi
 
-export FPM_CC
-export FPM_FFLAGS
-export FPM_FC
-
-# Install LightKrylov.
-fpm install
-
-# Run the unit tests.
-read -p "Do you want to run the tests for LightKrylov? (y/n): " confirm
-if [ "$confirm" == "y" ] || [ "$confirm" == "Y" ]; then
-    fpm test
-fi
-
-# Finalize.
 echo "LightKrylov setup complete."
+
