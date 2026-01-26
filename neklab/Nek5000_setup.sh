@@ -31,21 +31,46 @@ else
 fi
 
 # Install dependencies
-read -p "Do you want to install/update necessary packages? (y/n): " confirm
+echo ""
+echo "The following packages are needed to compile neklab:"
+echo "    - a fortran compiler (gfortran 14.3 is known to work)"
+echo "    - MPI (either mpich or openmpi)"
+echo "    - make (or cmake)"
+echo ""
+read -p "Do you need to install/update these packages? (y/n): " confirm
 if [ "$confirm" == "y" ] || [ "$confirm" == "Y" ]; then
-    echo "Installing dependencies..."
-    if [ "$OS" == "Linux" ]; then
-        sudo apt -y update
-        sudo apt install build-essential gfortran libopenmpi-dev cmake libx11-dev libxt-dev
-    elif [ "$OS" == "Darwin" ]; then
-        brew update
-        brew install gcc open-mpi cmake libx11 libxt
-    else
-        echo "Unsupported operating system. Exiting."
-        exit 1
-    fi
+    echo "Select the package manager to install these:"
+    echo " 1) conda"
+    echo " 2) apt (you will need sudo privilege)"
+    echo " 3) brew"
+    read -p "Enter the number of your choice: " pm_choice
+
+    case "$pm_choice" in
+        1) PM="conda" ;;
+        2) PM="apt" ;;
+        3) PM="brew" ;;
+        *) echo "Invalid choice. Exiting."; exit 1 ;;
+    esac
+
+    echo ""
+    echo "You selected the $PM package manager."
+    echo "Install dependencies with $PM..."
+    case "$PM" in
+        conda)
+            conda config --add channels conda-forge
+            conda install -y cmake gfortran openmpi
+            ;;
+        apt)
+            sudo apt -y update
+            sudo apt install build-essential gfortran libopenmpi-dev cmake
+            ;;
+        brew)
+            brew update
+            brew install gcc open-mpi cmake libx11 libxt
+            ;;
+    esac
 else
-    echo "Skipping package installation."
+    echo "Skipping dependencies installation."
 fi
 
 # Clone Nek5000 repository
@@ -85,7 +110,7 @@ else
 fi
 
 # Build genmap and genbox tools
-read -p "Do you want to build genmap and genbox tools? (y/n): " confirm
+read -p "Do you want to build genmap and genbox tools (recommended)? (y/n): " confirm
 if [ "$confirm" == "y" ] || [ "$confirm" == "Y" ]; then
     echo "Building genmap and genbox tools..."
     cd tools
