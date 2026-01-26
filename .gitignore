@@ -39,22 +39,3 @@
 
 # debug information files
 *.dwo
-
-# data generate by examples
-neklab/Nek5000
-neklab/LightKrylov
-neklab/examples/*/*.ma2
-neklab/examples/*/*.log
-neklab/examples/*/makefile*
-neklab/examples/*/*.nek5000
-neklab/examples/*/1cyl.re2
-neklab/examples/*/.usr
-neklab/examples/*/.state
-neklab/examples/*/obj
-neklab/examples/*/SESSION.NAME
-neklab/examples/*/nek5000*
-neklab/examples/*/spg1cyl*
-neklab/examples/*/dir1cyl*
-neklab/examples/*/*.npy
-neklab/examples/*/*.txt
-spmv/data/*.dat
